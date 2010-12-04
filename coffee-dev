@@ -1,3 +1,4 @@
+#!/usr/bin/env coffee
 ###
 Node.js supervisor that spawns a node child-process and restarts it when changes are
 detected in the filesystem. If the child-process exits due to an error, the
