@@ -1,15 +1,10 @@
 #!/usr/bin/env coffee
 ###
-Node.js supervisor that spawns a node child-process and restarts it when changes are
-detected in the filesystem. If the child-process exits due to an error, the
-supervisor waits for another modification before it attempts to re-spawn it. The
-output written to stderr is captured and scanned for stack-traces. If an error is
-detected it is displayed as a Growl notification.
-
-Original Author: Felix Gnass [fgnass at neteye dot de]
-Author: Robert Roose
-License: MIT
-See https://github.com/shivercube/node-dev
+CoffeeScript supervisor that spawns a coffee child-process and restarts it when
+changes are detected in the filesystem. If the child-process exits due to an error,
+the supervisor waits for another modification before it attempts to re-spawn it.
+The output written to stderr is captured and scanned for stack-traces. If an error
+is detected it is displayed as a Growl notification.
 ###
 
 fs = require 'fs'
@@ -32,9 +27,7 @@ walk = (filename, callback) ->
 				fs.realpath "#{filename}/#{f}", (err, path) ->
 					walk path, callback if not err
 
-###
-Watches all .js files and restarts the server if a modification is detected.
-###
+# Watches all .js files and restarts the server if a modification is detected.
 watchFiles = ->
 	files.forEach fs.unwatchFile
 	files = []
