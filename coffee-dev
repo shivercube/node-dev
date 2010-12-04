@@ -90,16 +90,16 @@ start = (title, msg="Started") ->
 	
 	# Data sent to stderr is scanned for stack-traces
 	server.stderr.on 'data', (data) ->
-		s = data.toString().replace /\r\n/g, '\n'
+		s = data.toString()
 		error += s
 		
-		stack = s.match /^(.+): (.*)\n\s+at.+\((.*?):(\d+):(\d+)/m
+		stack = s.match /^(.+): (.*)\n\s+at.+(.*?):(\d+):(\d+)/m
 		if stack
 			# file:line
 			# source-code
 			#			^^^^^
 			# ErrorType: Message
-			src = err.match /^\s*(.+):(\d+)\n(.*)\n(\s*)\^/
+			src = error.match /^\s*(.+):(\d+)\n(.*)\n(\s*)\^/
 			if src and not src[3].match /throw/
 				file = src[1]
 				line = src[2]
