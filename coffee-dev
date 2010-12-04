@@ -1,0 +1,121 @@
+###
+Node.js supervisor that spawns a node child-process and restarts it when changes are
+detected in the filesystem. If the child-process exits due to an error, the
+supervisor waits for another modification before it attempts to re-spawn it. The
+output written to stderr is captured and scanned for stack-traces. If an error is
+detected it is displayed as a Growl notification.
+
+Original Author: Felix Gnass [fgnass at neteye dot de]
+Author: Robert Roose
+License: MIT
+See https://github.com/shivercube/node-dev
+###
+
+fs = require 'fs'
+sys = require 'sys'
+path = require 'path'
+childProcess = require 'child_process'
+server = null
+error = ''
+files = []
+args = process.argv
+
+walk = (filename, callback) ->
+	stats = fs.statSync filename
+	if stats.isFile() and filename.match /\.(js|coffee)$/
+		callback filename
+	
+	else if stats.isDirectory()
+		fs.readdir filename, (err, files) ->
+			files.forEach (f) ->
+				fs.realpath "#{filename}/#{f}", (err, path) ->
+					walk path, callback if not err
+
+###
+Watches all .js files and restarts the server if a modification is detected.
+###
+watchFiles = ->
+	files.forEach fs.unwatchFile
+	files = []
+	walk process.cwd(), (file) ->
+		files.push file
+		fs.watchFile file, {interval: 500}, (curr, prev) ->
+			if (curr.mtime.valueOf() != prev.mtime.valueOf() or
+			curr.ctime.valueOf() != prev.ctime.valueOf())
+				if server
+					server.on 'exit', (code, signal) ->
+						start 'Restarting', "File modified: #{file}" if signal
+					server.kill 'SIGHUP'
+				else # Server not running, attempt to start it
+					start()
+
+###
+Logs a message to the console. The level is displayed in ANSI colors, either bright
+red in case of an error or green otherwise.
+###
+log = (msg, level) ->
+	csi = if level == 'error' then '1;31' else '32'
+	levelUpper = level.toUpperCase()
+	sys.log "[\x1B[#{csi}m#{levelUpper}\x1B[\0m] #{msg}"
+
+# Sets the terminal title.
+setTitle = (title) -> sys.print "\033]0;#{title}\007"
+
+# Reset title on exit
+process.on 'SIGINT', ->
+	setTitle ''
+	process.exit 0
+
+###
+Displays a message as Growl notification.
+Requires http://growl.info/extras.php#growlnotify
+###
+notify = (msg, title, level="info") ->
+	log (title || msg), level
+	childProcess.spawn('growlnotify', [
+		'-m', msg
+		'--image', "#{__dirname}/icons/node_#{level}.png"
+		title || 'node.js'
+	])
+	
+	setTitle 'coffee-dev'
+
+# Spawns a node child-process.
+start = (title, msg="Started") ->
+	watchFiles()
+	server = childProcess.spawn 'coffee', args, {customFds: [-1, 1, -1]}
+	notify msg, title
+	
+	server.on 'exit', (code, signal) -> server = null
+	
+	# Data sent to stderr is scanned for stack-traces
+	server.stderr.on 'data', (data) ->
+		s = data.toString().replace /\r\n/g, '\n'
+		error += s
+		
+		stack = s.match /^(.+): (.*)\n\s+at.+\((.*?):(\d+):(\d+)/m
+		if stack
+			# file:line
+			# source-code
+			#			^^^^^
+			# ErrorType: Message
+			src = err.match /^\s*(.+):(\d+)\n(.*)\n(\s*)\^/
+			if src and not src[3].match /throw/
+				file = src[1]
+				line = src[2]
+				col = src[4].length
+			else
+				# No source-code or error was rethrown
+				file = stack[3]
+				line = stack[4]
+				col = stack[5]
+			
+			notify "#{stack[2]}\n	@#{file},#{line}:#{col}", stack[1], 'error'
+			error = ''
+		
+		sys.print data
+
+if args.length > 0
+	start()
+else
+	sys.print 'Usage: coffee-dev [options] script.coffee [arguments]\n'
